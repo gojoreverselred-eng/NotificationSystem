@@ -1,13 +1,21 @@
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
 if getgenv().NotificationManager then return getgenv().NotificationManager end
 
 local parent = gethui and gethui() or LocalPlayer:WaitForChild("PlayerGui")
 
-local existingGui = parent:FindFirstChild("__NotifManager")
-if existingGui then existingGui:Destroy() end
+local existing = parent:FindFirstChild("__NotifManager")
+if existing then existing:Destroy() end
+
+getgenv()._NM_DEFAULT_SOUND    = 136001454409424
+getgenv()._NM_MAX_VISIBLE      = 5
+getgenv()._NM_DEFAULT_DURATION = 3.5
+getgenv()._NM_notifCount       = 0
+getgenv()._NM_queue            = {}
+getgenv()._NM_active           = {}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "__NotifManager"
@@ -17,46 +25,46 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 999
 
-if syn and syn.protect_gui then
-	syn.protect_gui(gui)
-end
+if syn and syn.protect_gui then syn.protect_gui(gui) end
 
 local container = Instance.new("Frame")
 container.Name = "Container"
 container.BackgroundTransparency = 1
 container.AnchorPoint = Vector2.new(1, 1)
-container.Size = UDim2.new(0, 260, 1, -12)
-container.Position = UDim2.new(1, -12, 1, -12)
+container.Size = UDim2.new(0, 280, 1, -16)
+container.Position = UDim2.new(1, -14, 1, -14)
 container.ZIndex = 100
 container.Parent = gui
 
 local layout = Instance.new("UIListLayout")
 layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Padding = UDim.new(0, 5)
+layout.Padding = UDim.new(0, 6)
 layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 layout.FillDirection = Enum.FillDirection.Vertical
 layout.Parent = container
 
 gui.Parent = parent
 
-local MAX_VISIBLE = 5
-local DEFAULT_DURATION = 3
-local ANIM_IN = 0.22
-local ANIM_OUT = 0.2
-
-local notifCount = 0
-local queue = {}
-local active = {}
+local function playSound(id)
+	local sid = id or getgenv()._NM_DEFAULT_SOUND
+	if type(sid) ~= "number" and type(sid) ~= "string" then return end
+	local s = Instance.new("Sound")
+	s.SoundId = "rbxassetid://" .. tostring(sid)
+	s.Volume = 0.5
+	s.Parent = SoundService
+	s:Play()
+	game:GetService("Debris"):AddItem(s, 4)
+end
 
 local function countActive()
 	local n = 0
-	for _ in pairs(active) do n += 1 end
+	for _ in pairs(getgenv()._NM_active) do n += 1 end
 	return n
 end
 
 local function processQueue()
-	while #queue > 0 and countActive() < MAX_VISIBLE do
-		local next = table.remove(queue, 1)
+	while #getgenv()._NM_queue > 0 and countActive() < getgenv()._NM_MAX_VISIBLE do
+		local next = table.remove(getgenv()._NM_queue, 1)
 		next()
 	end
 end
@@ -67,50 +75,57 @@ local function dismissNotif(frame, onDone)
 		return
 	end
 
-	TweenService:Create(frame, TweenInfo.new(ANIM_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+	local slideOut = TweenService:Create(frame, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Position = UDim2.new(1, 18, frame.Position.Y.Scale, frame.Position.Y.Offset),
 		BackgroundTransparency = 1,
-		Size = UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 0)
-	}):Play()
+	})
 
 	for _, child in pairs(frame:GetDescendants()) do
 		if child:IsA("TextLabel") then
-			TweenService:Create(child, TweenInfo.new(ANIM_OUT * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			TweenService:Create(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				TextTransparency = 1
 			}):Play()
 		elseif child:IsA("Frame") then
-			TweenService:Create(child, TweenInfo.new(ANIM_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				BackgroundTransparency = 1
+			}):Play()
+		elseif child:IsA("UIStroke") then
+			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Transparency = 1
 			}):Play()
 		end
 	end
 
-	task.delay(ANIM_OUT, function()
+	slideOut:Play()
+	slideOut.Completed:Connect(function()
 		frame:Destroy()
 		if onDone then onDone() end
 	end)
 end
 
-local function spawnNotif(title, message, color, duration)
-	notifCount += 1
-	local id = notifCount
-	local accentColor = color or Color3.fromRGB(80, 80, 100)
-	local dur = duration or DEFAULT_DURATION
+local function spawnNotif(title, message, color, duration, soundId)
+	getgenv()._NM_notifCount += 1
+	local id = getgenv()._NM_notifCount
+	local accentColor = color or Color3.fromRGB(100, 100, 120)
+	local dur = duration or getgenv()._NM_DEFAULT_DURATION
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Notif_" .. id
-	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 33)
+	frame.BackgroundColor3 = Color3.fromRGB(22, 22, 25)
 	frame.BackgroundTransparency = 1
 	frame.BorderSizePixel = 0
-	frame.Size = UDim2.new(1, 0, 0, 52)
+	frame.Size = UDim2.new(1, 0, 0, 54)
+	frame.Position = UDim2.new(0.12, 0, 0, 0)
 	frame.LayoutOrder = id
+	frame.ClipsDescendants = false
 	frame.Parent = container
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(0, 9)
 	corner.Parent = frame
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(55, 55, 62)
+	stroke.Color = Color3.fromRGB(48, 48, 54)
 	stroke.Thickness = 1
 	stroke.Transparency = 1
 	stroke.Parent = frame
@@ -119,22 +134,22 @@ local function spawnNotif(title, message, color, duration)
 	accent.BorderSizePixel = 0
 	accent.BackgroundColor3 = accentColor
 	accent.BackgroundTransparency = 1
-	accent.Size = UDim2.new(0, 3, 1, -10)
-	accent.Position = UDim2.new(0, 0, 0, 5)
+	accent.Size = UDim2.new(0, 3, 0.62, 0)
+	accent.Position = UDim2.new(0, 10, 0.19, 0)
 	accent.Parent = frame
 
 	local accentCorner = Instance.new("UICorner")
-	accentCorner.CornerRadius = UDim.new(0, 4)
+	accentCorner.CornerRadius = UDim.new(1, 0)
 	accentCorner.Parent = accent
 
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Text = title
-	titleLabel.TextColor3 = Color3.fromRGB(235, 235, 240)
+	titleLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
 	titleLabel.TextTransparency = 1
 	titleLabel.BackgroundTransparency = 1
 	titleLabel.BorderSizePixel = 0
-	titleLabel.Size = UDim2.new(1, -18, 0, 20)
-	titleLabel.Position = UDim2.new(0, 12, 0, 8)
+	titleLabel.Size = UDim2.new(1, -28, 0, 19)
+	titleLabel.Position = UDim2.new(0, 20, 0, 9)
 	titleLabel.TextWrapped = true
 	titleLabel.TextScaled = true
 	titleLabel.Font = Enum.Font.GothamBold
@@ -143,79 +158,105 @@ local function spawnNotif(title, message, color, duration)
 
 	local descLabel = Instance.new("TextLabel")
 	descLabel.Text = message
-	descLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+	descLabel.TextColor3 = Color3.fromRGB(135, 135, 148)
 	descLabel.TextTransparency = 1
 	descLabel.BackgroundTransparency = 1
 	descLabel.BorderSizePixel = 0
-	descLabel.Size = UDim2.new(1, -18, 0, 18)
-	descLabel.Position = UDim2.new(0, 12, 0, 28)
+	descLabel.Size = UDim2.new(1, -28, 0, 16)
+	descLabel.Position = UDim2.new(0, 20, 0, 29)
 	descLabel.TextWrapped = true
 	descLabel.TextScaled = true
 	descLabel.Font = Enum.Font.Gotham
 	descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	descLabel.Parent = frame
 
-	local progressBar = Instance.new("Frame")
-	progressBar.BorderSizePixel = 0
-	progressBar.BackgroundColor3 = accentColor
-	progressBar.BackgroundTransparency = 1
-	progressBar.Size = UDim2.new(1, 0, 0, 2)
-	progressBar.Position = UDim2.new(0, 0, 1, -2)
-	progressBar.Parent = frame
+	local progressTrack = Instance.new("Frame")
+	progressTrack.BorderSizePixel = 0
+	progressTrack.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
+	progressTrack.BackgroundTransparency = 1
+	progressTrack.Size = UDim2.new(1, -20, 0, 2)
+	progressTrack.Position = UDim2.new(0, 10, 1, -4)
+	progressTrack.Parent = frame
 
-	local progressCorner = Instance.new("UICorner")
-	progressCorner.CornerRadius = UDim.new(0, 2)
-	progressCorner.Parent = progressBar
+	local trackCorner = Instance.new("UICorner")
+	trackCorner.CornerRadius = UDim.new(1, 0)
+	trackCorner.Parent = progressTrack
 
-	active[id] = frame
+	local progressFill = Instance.new("Frame")
+	progressFill.BorderSizePixel = 0
+	progressFill.BackgroundColor3 = accentColor
+	progressFill.BackgroundTransparency = 1
+	progressFill.Size = UDim2.new(1, 0, 1, 0)
+	progressFill.Parent = progressTrack
 
-	TweenService:Create(frame, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
-	TweenService:Create(stroke, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Transparency = 0 }):Play()
-	TweenService:Create(accent, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
-	TweenService:Create(progressBar, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.4 }):Play()
-	TweenService:Create(titleLabel, TweenInfo.new(ANIM_IN + 0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
-	TweenService:Create(descLabel, TweenInfo.new(ANIM_IN + 0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
-	TweenService:Create(progressBar, TweenInfo.new(dur, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { Size = UDim2.new(0, 0, 0, 2) }):Play()
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(1, 0)
+	fillCorner.Parent = progressFill
+
+	getgenv()._NM_active[id] = frame
+
+	local slideInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local fadeInfo  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	TweenService:Create(frame, slideInfo, { Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 0 }):Play()
+	TweenService:Create(stroke, fadeInfo, { Transparency = 0 }):Play()
+	TweenService:Create(accent, fadeInfo, { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(progressTrack, fadeInfo, { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(progressFill, fadeInfo, { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(titleLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
+	TweenService:Create(descLabel, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
+
+	TweenService:Create(progressFill, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
+		Size = UDim2.new(0, 0, 1, 0)
+	}):Play()
+
+	playSound(soundId)
 
 	task.delay(dur, function()
-		active[id] = nil
+		getgenv()._NM_active[id] = nil
 		dismissNotif(frame, processQueue)
 	end)
 end
 
 local NotificationManager = {}
 
-function NotificationManager.notify(title, message, color, duration)
+function NotificationManager.notify(title, message, color, duration, soundId)
 	if type(title) ~= "string" or title == "" then return end
 	if type(message) ~= "string" then message = "" end
 	if color ~= nil and typeof(color) ~= "Color3" then color = nil end
 	if duration ~= nil and type(duration) ~= "number" then duration = nil end
+	if soundId ~= nil and type(soundId) ~= "number" then soundId = nil end
 
-	if countActive() < MAX_VISIBLE then
-		spawnNotif(title, message, color, duration)
+	if countActive() < getgenv()._NM_MAX_VISIBLE then
+		spawnNotif(title, message, color, duration, soundId)
 	else
-		table.insert(queue, function()
-			spawnNotif(title, message, color, duration)
+		table.insert(getgenv()._NM_queue, function()
+			spawnNotif(title, message, color, duration, soundId)
 		end)
 	end
 end
 
 function NotificationManager.dismissAll()
-	for id, frame in pairs(active) do
-		active[id] = nil
+	for id, frame in pairs(getgenv()._NM_active) do
+		getgenv()._NM_active[id] = nil
 		dismissNotif(frame)
 	end
-	queue = {}
+	getgenv()._NM_queue = {}
 end
 
 function NotificationManager.setMaxVisible(n)
 	if type(n) ~= "number" then return end
-	MAX_VISIBLE = math.clamp(math.floor(n), 1, 20)
+	getgenv()._NM_MAX_VISIBLE = math.clamp(math.floor(n), 1, 20)
 end
 
 function NotificationManager.setDefaultDuration(n)
 	if type(n) ~= "number" then return end
-	DEFAULT_DURATION = math.max(n, 0.5)
+	getgenv()._NM_DEFAULT_DURATION = math.max(n, 0.5)
+end
+
+function NotificationManager.setDefaultSound(id)
+	if type(id) ~= "number" then return end
+	getgenv()._NM_DEFAULT_SOUND = id
 end
 
 getgenv().NotificationManager = NotificationManager
