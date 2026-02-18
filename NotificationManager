@@ -1,1 +1,223 @@
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
+if getgenv().NotificationManager then return getgenv().NotificationManager end
+
+local parent = gethui and gethui() or LocalPlayer:WaitForChild("PlayerGui")
+
+local existingGui = parent:FindFirstChild("__NotifManager")
+if existingGui then existingGui:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "__NotifManager"
+gui.IgnoreGuiInset = true
+gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999
+
+if syn and syn.protect_gui then
+	syn.protect_gui(gui)
+end
+
+local container = Instance.new("Frame")
+container.Name = "Container"
+container.BackgroundTransparency = 1
+container.AnchorPoint = Vector2.new(1, 1)
+container.Size = UDim2.new(0, 260, 1, -12)
+container.Position = UDim2.new(1, -12, 1, -12)
+container.ZIndex = 100
+container.Parent = gui
+
+local layout = Instance.new("UIListLayout")
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 5)
+layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+layout.FillDirection = Enum.FillDirection.Vertical
+layout.Parent = container
+
+gui.Parent = parent
+
+local MAX_VISIBLE = 5
+local DEFAULT_DURATION = 3
+local ANIM_IN = 0.22
+local ANIM_OUT = 0.2
+
+local notifCount = 0
+local queue = {}
+local active = {}
+
+local function countActive()
+	local n = 0
+	for _ in pairs(active) do n += 1 end
+	return n
+end
+
+local function processQueue()
+	while #queue > 0 and countActive() < MAX_VISIBLE do
+		local next = table.remove(queue, 1)
+		next()
+	end
+end
+
+local function dismissNotif(frame, onDone)
+	if not frame or not frame.Parent then
+		if onDone then onDone() end
+		return
+	end
+
+	TweenService:Create(frame, TweenInfo.new(ANIM_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 0)
+	}):Play()
+
+	for _, child in pairs(frame:GetDescendants()) do
+		if child:IsA("TextLabel") then
+			TweenService:Create(child, TweenInfo.new(ANIM_OUT * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				TextTransparency = 1
+			}):Play()
+		elseif child:IsA("Frame") then
+			TweenService:Create(child, TweenInfo.new(ANIM_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				BackgroundTransparency = 1
+			}):Play()
+		end
+	end
+
+	task.delay(ANIM_OUT, function()
+		frame:Destroy()
+		if onDone then onDone() end
+	end)
+end
+
+local function spawnNotif(title, message, color, duration)
+	notifCount += 1
+	local id = notifCount
+	local accentColor = color or Color3.fromRGB(80, 80, 100)
+	local dur = duration or DEFAULT_DURATION
+
+	local frame = Instance.new("Frame")
+	frame.Name = "Notif_" .. id
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 33)
+	frame.BackgroundTransparency = 1
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.new(1, 0, 0, 52)
+	frame.LayoutOrder = id
+	frame.Parent = container
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(55, 55, 62)
+	stroke.Thickness = 1
+	stroke.Transparency = 1
+	stroke.Parent = frame
+
+	local accent = Instance.new("Frame")
+	accent.BorderSizePixel = 0
+	accent.BackgroundColor3 = accentColor
+	accent.BackgroundTransparency = 1
+	accent.Size = UDim2.new(0, 3, 1, -10)
+	accent.Position = UDim2.new(0, 0, 0, 5)
+	accent.Parent = frame
+
+	local accentCorner = Instance.new("UICorner")
+	accentCorner.CornerRadius = UDim.new(0, 4)
+	accentCorner.Parent = accent
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Text = title
+	titleLabel.TextColor3 = Color3.fromRGB(235, 235, 240)
+	titleLabel.TextTransparency = 1
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.BorderSizePixel = 0
+	titleLabel.Size = UDim2.new(1, -18, 0, 20)
+	titleLabel.Position = UDim2.new(0, 12, 0, 8)
+	titleLabel.TextWrapped = true
+	titleLabel.TextScaled = true
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Parent = frame
+
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Text = message
+	descLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+	descLabel.TextTransparency = 1
+	descLabel.BackgroundTransparency = 1
+	descLabel.BorderSizePixel = 0
+	descLabel.Size = UDim2.new(1, -18, 0, 18)
+	descLabel.Position = UDim2.new(0, 12, 0, 28)
+	descLabel.TextWrapped = true
+	descLabel.TextScaled = true
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.Parent = frame
+
+	local progressBar = Instance.new("Frame")
+	progressBar.BorderSizePixel = 0
+	progressBar.BackgroundColor3 = accentColor
+	progressBar.BackgroundTransparency = 1
+	progressBar.Size = UDim2.new(1, 0, 0, 2)
+	progressBar.Position = UDim2.new(0, 0, 1, -2)
+	progressBar.Parent = frame
+
+	local progressCorner = Instance.new("UICorner")
+	progressCorner.CornerRadius = UDim.new(0, 2)
+	progressCorner.Parent = progressBar
+
+	active[id] = frame
+
+	TweenService:Create(frame, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(stroke, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Transparency = 0 }):Play()
+	TweenService:Create(accent, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(progressBar, TweenInfo.new(ANIM_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.4 }):Play()
+	TweenService:Create(titleLabel, TweenInfo.new(ANIM_IN + 0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
+	TweenService:Create(descLabel, TweenInfo.new(ANIM_IN + 0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextTransparency = 0 }):Play()
+	TweenService:Create(progressBar, TweenInfo.new(dur, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { Size = UDim2.new(0, 0, 0, 2) }):Play()
+
+	task.delay(dur, function()
+		active[id] = nil
+		dismissNotif(frame, processQueue)
+	end)
+end
+
+local NotificationManager = {}
+
+function NotificationManager.notify(title, message, color, duration)
+	if type(title) ~= "string" or title == "" then return end
+	if type(message) ~= "string" then message = "" end
+	if color ~= nil and typeof(color) ~= "Color3" then color = nil end
+	if duration ~= nil and type(duration) ~= "number" then duration = nil end
+
+	if countActive() < MAX_VISIBLE then
+		spawnNotif(title, message, color, duration)
+	else
+		table.insert(queue, function()
+			spawnNotif(title, message, color, duration)
+		end)
+	end
+end
+
+function NotificationManager.dismissAll()
+	for id, frame in pairs(active) do
+		active[id] = nil
+		dismissNotif(frame)
+	end
+	queue = {}
+end
+
+function NotificationManager.setMaxVisible(n)
+	if type(n) ~= "number" then return end
+	MAX_VISIBLE = math.clamp(math.floor(n), 1, 20)
+end
+
+function NotificationManager.setDefaultDuration(n)
+	if type(n) ~= "number" then return end
+	DEFAULT_DURATION = math.max(n, 0.5)
+end
+
+getgenv().NotificationManager = NotificationManager
+
+return NotificationManager
