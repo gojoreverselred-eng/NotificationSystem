@@ -1,1 +1,55 @@
+if getgenv().ConfigManager then return getgenv().ConfigManager end
 
+local HttpService = game:GetService("HttpService")
+local ConfigManager = {}
+
+local function getPath(name)
+	return name .. ".cfg"
+end
+
+function ConfigManager.save(name, data)
+	if type(name) ~= "string" or name == "" then name = "VOID XX" end
+	if type(data) ~= "table" then return end
+	local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+	if not ok then return end
+	pcall(function() writefile(getPath(name), encoded) end)
+end
+
+function ConfigManager.load(name)
+	if type(name) ~= "string" or name == "" then name = "VOID XX" end
+	local path = getPath(name)
+	if not isfile(path) then return nil end
+	local ok, content = pcall(function() return readfile(path) end)
+	if not ok or not content or content == "" then return nil end
+	local ok2, data = pcall(function() return HttpService:JSONDecode(content) end)
+	if not ok2 then return nil end
+	return data
+end
+
+function ConfigManager.delete(name)
+	if type(name) ~= "string" or name == "" then return end
+	local path = getPath(name)
+	if not isfile(path) then return end
+	pcall(function() delfile(path) end)
+end
+
+function ConfigManager.list()
+	local configs = {}
+	local ok, files = pcall(function() return listfiles(".") end)
+	if not ok then return configs end
+	for _, file in pairs(files) do
+		if file:sub(-4) == ".cfg" then
+			local name = file:sub(1, -5)
+			table.insert(configs, name)
+		end
+	end
+	return configs
+end
+
+function ConfigManager.exists(name)
+	if type(name) ~= "string" or name == "" then return false end
+	return isfile(getPath(name))
+end
+
+getgenv().ConfigManager = ConfigManager
+return ConfigManager
