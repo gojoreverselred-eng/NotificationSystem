@@ -1,1 +1,44 @@
+if getgenv().DownloadManager then return getgenv().DownloadManager end
 
+local DownloadManager = {}
+
+function DownloadManager.download(url, filename)
+	if type(url) ~= "string" or url == "" then return end
+	if type(filename) ~= "string" or filename == "" then return end
+
+	if not isfile(filename) then
+		local ok, data = pcall(function()
+			return game:HttpGet(url, true)
+		end)
+
+		if not ok or not data or data == "" then return end
+
+		local wrote = pcall(function()
+			writefile(filename, data)
+		end)
+
+		if not wrote then return end
+	end
+
+	return filename
+end
+
+function DownloadManager.delete(filename)
+	if type(filename) ~= "string" or filename == "" then return end
+	if not isfile(filename) then return end
+	pcall(function() delfile(filename) end)
+end
+
+function DownloadManager.exists(filename)
+	if type(filename) ~= "string" or filename == "" then return false end
+	return isfile(filename)
+end
+
+function DownloadManager.redownload(url, filename)
+	DownloadManager.delete(filename)
+	return DownloadManager.download(url, filename)
+end
+
+getgenv().DownloadManager = DownloadManager
+
+return DownloadManager
