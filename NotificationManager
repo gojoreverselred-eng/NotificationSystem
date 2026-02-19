@@ -1,4 +1,4 @@
--- open sourcqe notification manager isnt mines
+-- open sourave notification manager not mines 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
@@ -11,24 +11,28 @@ local parent = gethui and gethui() or LocalPlayer:WaitForChild("PlayerGui")
 local existing = parent:FindFirstChild("__NotifManager")
 if existing then existing:Destroy() end
 
-getgenv()._NM_DEFAULT_SOUND      = 136001454409424
-getgenv()._NM_MAX_VISIBLE        = 5
-getgenv()._NM_DEFAULT_DURATION   = 3.5
-getgenv()._NM_notifCount         = 0
-getgenv()._NM_queue              = {}
-getgenv()._NM_active             = {}
+getgenv()._NM_DEFAULT_SOUND    = 136001454409424
+getgenv()._NM_MAX_VISIBLE      = 5
+getgenv()._NM_DEFAULT_DURATION = 3.5
+getgenv()._NM_notifCount       = 0
+getgenv()._NM_queue            = {}
+getgenv()._NM_active           = {}
 
-getgenv()._NM_BG_COLOR           = Color3.fromRGB(22, 22, 25)
-getgenv()._NM_BG_TRANSPARENCY    = 0
-getgenv()._NM_STROKE_COLOR       = Color3.fromRGB(48, 48, 54)
-getgenv()._NM_STROKE_THICKNESS   = 1
-getgenv()._NM_TITLE_COLOR        = Color3.fromRGB(230, 230, 235)
-getgenv()._NM_DESC_COLOR         = Color3.fromRGB(135, 135, 148)
-getgenv()._NM_FONT_TITLE         = Enum.Font.GothamBold
-getgenv()._NM_FONT_DESC          = Enum.Font.Gotham
-getgenv()._NM_CORNER_RADIUS      = UDim.new(0, 9)
-getgenv()._NM_WIDTH              = 280
-getgenv()._NM_HEIGHT             = 54
+getgenv()._NM_CONFIG = {
+	BackgroundColor    = Color3.fromRGB(22, 22, 25),
+	BackgroundTransparency = 0,
+	StrokeColor        = Color3.fromRGB(48, 48, 54),
+	StrokeThickness    = 1,
+	TitleColor         = Color3.fromRGB(230, 230, 235),
+	DescColor          = Color3.fromRGB(135, 135, 148),
+	ProgressTrackColor = Color3.fromRGB(40, 40, 46),
+	CornerRadius       = UDim.new(0, 9),
+	TitleFont          = Enum.Font.GothamBold,
+	DescFont           = Enum.Font.Gotham,
+	Width              = 280,
+	Height             = 54,
+	Position           = "bottomright",
+}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "__NotifManager"
@@ -37,7 +41,6 @@ gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 999
-
 if syn and syn.protect_gui then syn.protect_gui(gui) end
 
 local container = Instance.new("Frame")
@@ -57,6 +60,31 @@ layout.FillDirection = Enum.FillDirection.Vertical
 layout.Parent = container
 
 gui.Parent = parent
+
+local function applyContainerPosition()
+	local cfg = getgenv()._NM_CONFIG
+	local pos = cfg.Position or "bottomright"
+	local w = cfg.Width or 280
+	container.Size = UDim2.new(0, w, 1, -16)
+	if pos == "bottomright" then
+		container.AnchorPoint = Vector2.new(1,1)
+		container.Position = UDim2.new(1,-14,1,-14)
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	elseif pos == "bottomleft" then
+		container.AnchorPoint = Vector2.new(0,1)
+		container.Position = UDim2.new(0,14,1,-14)
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	elseif pos == "topright" then
+		container.AnchorPoint = Vector2.new(1,0)
+		container.Position = UDim2.new(1,-14,0,14)
+		layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	elseif pos == "topleft" then
+		container.AnchorPoint = Vector2.new(0,0)
+		container.Position = UDim2.new(0,14,0,14)
+		layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	end
+end
+applyContainerPosition()
 
 local function playSound(id)
 	local sid = id or getgenv()._NM_DEFAULT_SOUND
@@ -93,11 +121,11 @@ local function dismissNotif(frame, onDone)
 	})
 	for _, child in pairs(frame:GetDescendants()) do
 		if child:IsA("TextLabel") then
-			TweenService:Create(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1}):Play()
+			TweenService:Create(child, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency=1}):Play()
 		elseif child:IsA("Frame") then
-			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
+			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency=1}):Play()
 		elseif child:IsA("UIStroke") then
-			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Transparency = 1}):Play()
+			TweenService:Create(child, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Transparency=1}):Play()
 		end
 	end
 	slideOut:Play()
@@ -108,29 +136,31 @@ local function dismissNotif(frame, onDone)
 end
 
 local function spawnNotif(title, message, color, duration, soundId)
+	local cfg = getgenv()._NM_CONFIG
 	getgenv()._NM_notifCount += 1
 	local id = getgenv()._NM_notifCount
 	local accentColor = color or Color3.fromRGB(100, 100, 120)
 	local dur = duration or getgenv()._NM_DEFAULT_DURATION
+	local h = cfg.Height or 54
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Notif_" .. id
-	frame.BackgroundColor3 = getgenv()._NM_BG_COLOR
+	frame.BackgroundColor3 = cfg.BackgroundColor or Color3.fromRGB(22,22,25)
 	frame.BackgroundTransparency = 1
 	frame.BorderSizePixel = 0
-	frame.Size = UDim2.new(1, 0, 0, getgenv()._NM_HEIGHT)
+	frame.Size = UDim2.new(1, 0, 0, h)
 	frame.Position = UDim2.new(0.12, 0, 0, 0)
 	frame.LayoutOrder = id
 	frame.ClipsDescendants = false
 	frame.Parent = container
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = getgenv()._NM_CORNER_RADIUS
+	corner.CornerRadius = cfg.CornerRadius or UDim.new(0,9)
 	corner.Parent = frame
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = getgenv()._NM_STROKE_COLOR
-	stroke.Thickness = getgenv()._NM_STROKE_THICKNESS
+	stroke.Color = cfg.StrokeColor or Color3.fromRGB(48,48,54)
+	stroke.Thickness = cfg.StrokeThickness or 1
 	stroke.Transparency = 1
 	stroke.Parent = frame
 
@@ -148,7 +178,7 @@ local function spawnNotif(title, message, color, duration, soundId)
 
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Text = title
-	titleLabel.TextColor3 = getgenv()._NM_TITLE_COLOR
+	titleLabel.TextColor3 = cfg.TitleColor or Color3.fromRGB(230,230,235)
 	titleLabel.TextTransparency = 1
 	titleLabel.BackgroundTransparency = 1
 	titleLabel.BorderSizePixel = 0
@@ -156,13 +186,13 @@ local function spawnNotif(title, message, color, duration, soundId)
 	titleLabel.Position = UDim2.new(0, 20, 0, 9)
 	titleLabel.TextWrapped = true
 	titleLabel.TextScaled = true
-	titleLabel.Font = getgenv()._NM_FONT_TITLE
+	titleLabel.Font = cfg.TitleFont or Enum.Font.GothamBold
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = frame
 
 	local descLabel = Instance.new("TextLabel")
 	descLabel.Text = message
-	descLabel.TextColor3 = getgenv()._NM_DESC_COLOR
+	descLabel.TextColor3 = cfg.DescColor or Color3.fromRGB(135,135,148)
 	descLabel.TextTransparency = 1
 	descLabel.BackgroundTransparency = 1
 	descLabel.BorderSizePixel = 0
@@ -170,13 +200,13 @@ local function spawnNotif(title, message, color, duration, soundId)
 	descLabel.Position = UDim2.new(0, 20, 0, 29)
 	descLabel.TextWrapped = true
 	descLabel.TextScaled = true
-	descLabel.Font = getgenv()._NM_FONT_DESC
+	descLabel.Font = cfg.DescFont or Enum.Font.Gotham
 	descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	descLabel.Parent = frame
 
 	local progressTrack = Instance.new("Frame")
 	progressTrack.BorderSizePixel = 0
-	progressTrack.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
+	progressTrack.BackgroundColor3 = cfg.ProgressTrackColor or Color3.fromRGB(40,40,46)
 	progressTrack.BackgroundTransparency = 1
 	progressTrack.Size = UDim2.new(1, -20, 0, 2)
 	progressTrack.Position = UDim2.new(0, 10, 1, -4)
@@ -199,20 +229,19 @@ local function spawnNotif(title, message, color, duration, soundId)
 
 	getgenv()._NM_active[id] = frame
 
+	local bgTransp = cfg.BackgroundTransparency or 0
 	local slideInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local fadeInfo  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-	TweenService:Create(frame, slideInfo, {Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = getgenv()._NM_BG_TRANSPARENCY}):Play()
-	TweenService:Create(stroke, fadeInfo, {Transparency = 0}):Play()
-	TweenService:Create(accent, fadeInfo, {BackgroundTransparency = 0}):Play()
-	TweenService:Create(progressTrack, fadeInfo, {BackgroundTransparency = 0}):Play()
-	TweenService:Create(progressFill, fadeInfo, {BackgroundTransparency = 0}):Play()
-	TweenService:Create(titleLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
-	TweenService:Create(descLabel, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+	TweenService:Create(frame, slideInfo, {Position=UDim2.new(0,0,0,0), BackgroundTransparency=bgTransp}):Play()
+	TweenService:Create(stroke, fadeInfo, {Transparency=0}):Play()
+	TweenService:Create(accent, fadeInfo, {BackgroundTransparency=0}):Play()
+	TweenService:Create(progressTrack, fadeInfo, {BackgroundTransparency=0}):Play()
+	TweenService:Create(progressFill, fadeInfo, {BackgroundTransparency=0}):Play()
+	TweenService:Create(titleLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
+	TweenService:Create(descLabel, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency=0}):Play()
 
-	TweenService:Create(progressFill, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
-		Size = UDim2.new(0, 0, 1, 0)
-	}):Play()
+	TweenService:Create(progressFill, TweenInfo.new(dur, Enum.EasingStyle.Linear), {Size=UDim2.new(0,0,1,0)}):Play()
 
 	playSound(soundId)
 
@@ -262,41 +291,72 @@ function NotificationManager.setDefaultSound(id)
 	getgenv()._NM_DEFAULT_SOUND = id
 end
 
-function NotificationManager.setBackgroundColor(color, transparency)
-	if typeof(color) == "Color3" then getgenv()._NM_BG_COLOR = color end
-	if type(transparency) == "number" then getgenv()._NM_BG_TRANSPARENCY = math.clamp(transparency, 0, 1) end
+function NotificationManager.setBackgroundColor(color)
+	if typeof(color) ~= "Color3" then return end
+	getgenv()._NM_CONFIG.BackgroundColor = color
+end
+
+function NotificationManager.setBackgroundTransparency(t)
+	if type(t) ~= "number" then return end
+	getgenv()._NM_CONFIG.BackgroundTransparency = math.clamp(t, 0, 1)
 end
 
 function NotificationManager.setStroke(color, thickness)
-	if typeof(color) == "Color3" then getgenv()._NM_STROKE_COLOR = color end
-	if type(thickness) == "number" then getgenv()._NM_STROKE_THICKNESS = math.max(thickness, 0) end
+	if typeof(color) == "Color3" then getgenv()._NM_CONFIG.StrokeColor = color end
+	if type(thickness) == "number" then getgenv()._NM_CONFIG.StrokeThickness = thickness end
 end
 
 function NotificationManager.setTitleColor(color)
-	if typeof(color) == "Color3" then getgenv()._NM_TITLE_COLOR = color end
+	if typeof(color) ~= "Color3" then return end
+	getgenv()._NM_CONFIG.TitleColor = color
 end
 
 function NotificationManager.setDescColor(color)
-	if typeof(color) == "Color3" then getgenv()._NM_DESC_COLOR = color end
+	if typeof(color) ~= "Color3" then return end
+	getgenv()._NM_CONFIG.DescColor = color
 end
 
-function NotificationManager.setFonts(titleFont, descFont)
-	if titleFont ~= nil then getgenv()._NM_FONT_TITLE = titleFont end
-	if descFont ~= nil then getgenv()._NM_FONT_DESC = descFont end
+function NotificationManager.setProgressTrackColor(color)
+	if typeof(color) ~= "Color3" then return end
+	getgenv()._NM_CONFIG.ProgressTrackColor = color
+end
+
+function NotificationManager.setTitleFont(font)
+	if typeof(font) ~= "EnumItem" then return end
+	getgenv()._NM_CONFIG.TitleFont = font
+end
+
+function NotificationManager.setDescFont(font)
+	if typeof(font) ~= "EnumItem" then return end
+	getgenv()._NM_CONFIG.DescFont = font
 end
 
 function NotificationManager.setCornerRadius(udim)
-	if typeof(udim) == "UDim" then getgenv()._NM_CORNER_RADIUS = udim end
+	if typeof(udim) ~= "UDim" then return end
+	getgenv()._NM_CONFIG.CornerRadius = udim
 end
 
 function NotificationManager.setSize(width, height)
-	if type(width) == "number" then
-		getgenv()._NM_WIDTH = width
-		container.Size = UDim2.new(0, width, 1, -16)
+	if type(width) == "number" then getgenv()._NM_CONFIG.Width = width end
+	if type(height) == "number" then getgenv()._NM_CONFIG.Height = height end
+	applyContainerPosition()
+end
+
+function NotificationManager.setPosition(pos)
+	local valid = {bottomright=true, bottomleft=true, topright=true, topleft=true}
+	if not valid[pos] then return end
+	getgenv()._NM_CONFIG.Position = pos
+	applyContainerPosition()
+end
+
+function NotificationManager.configure(tbl)
+	if type(tbl) ~= "table" then return end
+	local cfg = getgenv()._NM_CONFIG
+	for k, v in pairs(tbl) do
+		if cfg[k] ~= nil then cfg[k] = v end
 	end
-	if type(height) == "number" then getgenv()._NM_HEIGHT = height end
+	applyContainerPosition()
 end
 
 getgenv().NotificationManager = NotificationManager
-
 return NotificationManager
